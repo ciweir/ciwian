@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>火柴无双</title>
+<!--
+  《火柴无双》工程版（Vite + TypeScript）
+  操作：WASD移动 J攻 K重(蓄力) L无双 空格冲刺 / 触屏摇杆+按钮，空白处双击冲刺
+  已实现：武器系统(拳脚/长枪/双刀/重锤)、升级技能三选一、连击/暴击/无双/波次/Boss、WebAudio 合成音效
+-->
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body oncontextmenu="return false">
+<div id="app">
+<!-- 加载动画（内联首屏可见，初始化完成后淡出） -->
+<div id="loading">
+  <div class="titleRow"><h1 class="loadTitle kaiTitle">火柴无双</h1><span class="seal">武</span></div>
+  <div class="stickTrack">
+    <div class="stick">
+      <div class="s-head"></div>
+      <div class="s-body"></div>
+      <div class="s-arm a1"></div>
+      <div class="s-arm a2"></div>
+      <div class="s-leg l1"></div>
+      <div class="s-leg l2"></div>
+    </div>
+    <div class="loadBar"><div class="loadFill"></div></div>
+  </div>
+  <p class="loadText">LOADING<span class="d1">.</span><span class="d2">.</span><span class="d3">.</span></p>
+</div>
+
+<canvas id="game"></canvas>
+
+<div id="rotateHint"><div style="font-size:46px">&#8635;</div><div>横屏游玩体验更佳</div><button id="rotDismiss" class="ghost">竖屏开打</button></div>
+
+<div id="joy"><div id="joyKnob"></div></div>
+<div class="btn" id="btnAtk">攻</div>
+<div class="btn" id="btnHeavy">重</div>
+<div class="btn" id="btnMusou">无双</div>
+
+<!-- 主菜单：分区导航 -->
+<div id="menu">
+  <!-- 夜雨江湖场景层：纯 CSS/SVG，无外部资源 -->
+  <div class="menuScene" aria-hidden="true">
+    <span class="sceneMoon"></span>
+    <span class="sceneRain"></span>
+    <span class="sceneInk"></span>
+    <span class="sceneLantern"></span>
+    <svg class="sceneBamboo" viewBox="0 0 240 620" preserveAspectRatio="xMinYMax slice">
+      <g fill="none" stroke="rgba(232,224,206,.13)" stroke-width="5" stroke-linecap="round">
+        <path d="M28 620 C36 500 18 392 42 286 C56 214 44 118 66 20"/>
+        <path d="M104 620 C112 510 94 410 118 310 C132 246 122 150 144 54"/>
+        <path d="M176 620 C184 520 166 430 190 340 C204 282 194 200 216 120"/>
+      </g>
+      <g fill="none" stroke="rgba(232,224,206,.10)" stroke-width="3" stroke-linecap="round">
+        <path d="M42 286 C76 270 96 244 112 214"/>
+        <path d="M118 310 C86 296 66 272 54 244"/>
+        <path d="M190 340 C220 326 234 300 242 270"/>
+        <path d="M144 200 C114 188 96 164 88 138"/>
+        <path d="M66 420 C96 408 112 386 122 360"/>
+      </g>
+    </svg>
+    <svg class="sceneDuelist" viewBox="0 0 200 260" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="96" cy="38" r="18" stroke="rgba(232,224,206,.24)" stroke-width="4"/>
+      <path d="M96 56 L96 134 M96 84 L54 112 M96 84 L140 62 M96 134 L64 214 M96 134 L130 208" stroke="rgba(232,224,206,.22)" stroke-width="4"/>
+      <path d="M140 62 L174 24" stroke="rgba(212,169,78,.42)" stroke-width="3"/>
+      <path d="M174 24 L184 12" stroke="rgba(212,169,78,.26)" stroke-width="2"/>
+      <circle cx="102" cy="36" r="2.4" fill="rgba(200,68,58,.7)" stroke="none"/>
+    </svg>
+    <span class="sceneScrim"></span>
+  </div>
+  <div class="titleRow"><h1 class="kaiTitle">火柴无双</h1><span class="seal">武</span></div>
+  <p class="sub">— 江 湖 夜 雨 · 快 意 恩 仇 —</p>
+  <div class="menuBtns">
+    <button id="menuStart">开 战</button>
+    <button id="menuRecords" class="ghost">武 林 录</button>
+    <button id="menuLadder" class="ghost">天 梯</button>
+    <button id="menuShop" class="ghost">强 化</button>
+    <button id="menuSettings" class="ghost">设 置</button>
+  </div>
+  <p class="best"><span id="menuAchv"></span> · 金币 <span id="menuCoins">0</span></p>
+  <p class="hint">WASD 移动 · J 攻 · K 重(按住蓄力) · L 无双 · 空格冲刺 · Esc 暂停<br>触屏：摇杆 + 按钮，空白处双击冲刺</p>
+</div>
+
+<!-- 择器页（主菜单子页）：选武器 + 三种开局 -->
+<div id="start">
+  <div class="titleRow"><h1 class="kaiTitle">择 器</h1><span class="seal">器</span></div>
+  <p class="sub">— 择 器 而 战 —</p>
+  <div id="weaponCards"></div>
+  <button id="startBtn">开 战</button>
+  <div class="row">
+    <button id="dailyBtn" class="ghost">每日挑战</button>
+    <button id="rushBtn" class="ghost">群雄轮战</button>
+  </div>
+  <p class="dailyMod" id="dailyModInfo"></p>
+  <button id="backMenu1" class="ghost backBtn">返 回</button>
+</div>
+
+<!-- 武林录：生涯统计 + 成就图鉴 + 改名 -->
+<div id="records">
+  <div class="titleRow"><h1 class="kaiTitle">武 林 录</h1><span class="seal">录</span></div>
+  <div id="careerStats" class="careerGrid"></div>
+  <p class="sub">— 成 就 图 鉴 —</p>
+  <div id="achvGrid"></div>
+  <div class="nameRow">
+    <label class="opt">名号 <input type="text" id="nameInput" maxlength="12" placeholder="无名侠客"></label>
+    <button id="saveName" class="ghost">存 名</button>
+  </div>
+  <button id="backMenu2" class="ghost backBtn">返 回</button>
+</div>
+
+<!-- 天梯：每日挑战榜单 -->
+<div id="ladder">
+  <div class="titleRow"><h1 class="kaiTitle">天 梯</h1><span class="seal">榜</span></div>
+  <div class="lb" id="ladderList"></div>
+  <p class="best" id="ladderLocal"></p>
+  <p class="hint" id="ladderTip"></p>
+  <div class="row">
+    <button id="ladderRefresh" class="ghost">刷 新</button>
+    <button id="backMenu3" class="ghost backBtn">返 回</button>
+  </div>
+</div>
+
+<!-- 强化：局外强化商店 -->
+<div id="shopPage">
+  <div class="titleRow"><h1 class="kaiTitle">强 化</h1><span class="seal">铸</span></div>
+  <p class="sub">— 局外强化 · 金币 <span id="coins">0</span> —</p>
+  <div id="shopGrid"></div>
+  <button id="backMenu4" class="ghost backBtn">返 回</button>
+</div>
+
+<!-- 设置页（主菜单 / 暂停菜单均可进入） -->
+<div id="settings">
+  <div class="titleRow"><h1 class="kaiTitle">设 置</h1><span class="seal">设</span></div>
+  <label class="opt"><input type="checkbox" id="optShake" checked> 屏幕震动</label>
+  <label class="opt">音效 <input type="range" id="optVol" min="0" max="100" value="80"></label>
+  <label class="opt">音乐 <input type="range" id="optMusic" min="0" max="100" value="60"></label>
+  <label class="opt">屏幕方向
+    <select id="optOrient">
+      <option value="auto">跟随设备</option>
+      <option value="landscape">强制横屏</option>
+      <option value="portrait">强制竖屏</option>
+    </select>
+  </label>
+  <p class="sub">— 云 存 档 —</p>
+  <button id="saveCode" class="ghost">存档码 ········</button>
+  <label class="opt">恢复码 <input type="text" id="restoreCode" maxlength="9" placeholder="留空 = 本机码"></label>
+  <div class="row">
+    <button id="saveUpload" class="ghost">上传云端</button>
+    <button id="saveRestore" class="ghost">恢复存档</button>
+  </div>
+  <p class="hint" id="saveMsg">换设备：老机上传 → 新机粘贴老机存档码 → 恢复存档</p>
+  <button id="backMenu5" class="ghost backBtn">返 回</button>
+</div>
+
+<!-- 升级技能三选一 -->
+<div id="skillModal">
+  <div class="titleRow"><h2 class="kaiTitle">境界突破</h2><span class="seal">升</span></div>
+  <p class="sub">择一而修</p>
+  <div id="skillCards"></div>
+</div>
+
+<!-- 暂停菜单 -->
+<div id="pause">
+  <div class="titleRow"><h1 class="kaiTitle">歇 脚</h1><span class="seal">歇</span></div>
+  <div class="stat" id="pauseStats"></div>
+  <div class="row">
+    <button id="resume">继 续</button>
+    <button id="pauseRestart" class="ghost">重 开</button>
+    <button id="pauseWeapon" class="ghost">换武器</button>
+  </div>
+  <button id="pauseSettings" class="ghost backBtn">设 置</button>
+  <p class="hint">Esc / P 暂停与继续</p>
+</div>
+
+<!-- 通关结算 -->
+<div id="win" class="resultPage">
+  <div class="titleRow"><h1 class="kaiTitle">武林至尊</h1><span class="seal">尊</span></div>
+  <p class="sub">— 霸主已陨 · 天下无双 —</p>
+  <div class="resultHero">
+    <span class="rLabel">通关用时</span>
+    <span class="rValue"><span id="winTime">0</span><small>s</small></span>
+  </div>
+  <div class="resultGrid">
+    <div class="rCell"><span class="rLabel">击杀</span><span class="rValue" id="winKills">0</span></div>
+    <div class="rCell"><span class="rLabel">最大连击</span><span class="rValue" id="winCombo">0</span></div>
+    <div class="rCell"><span class="rLabel">金币</span><span class="rValue" id="winCoins">0</span></div>
+  </div>
+  <div class="best" id="winBest"></div>
+  <div class="lb" id="winLbList"></div>
+  <div class="row">
+    <button id="winRestart">再战江湖</button>
+    <button id="winWeapon" class="ghost">更换武器</button>
+    <button id="shareWin" class="ghost">战绩图</button>
+  </div>
+</div>
+
+<!-- 结算 -->
+<div id="over" class="resultPage">
+  <div class="titleRow"><h1>阵 亡</h1><span class="seal">殁</span></div>
+  <div class="resultHero">
+    <span class="rLabel">存活时间</span>
+    <span class="rValue"><span id="stTime">0</span><small>s</small></span>
+  </div>
+  <div class="resultGrid">
+    <div class="rCell"><span class="rLabel">进度</span><span class="rValue" id="stWave">0</span></div>
+    <div class="rCell"><span class="rLabel">最大连击</span><span class="rValue" id="stCombo">0</span></div>
+    <div class="rCell"><span class="rLabel">金币</span><span class="rValue" id="stCoins">0</span></div>
+  </div>
+  <div class="best" id="stBest"></div>
+  <div class="lb" id="lbList"></div>
+  <div class="row">
+    <button id="restart">再来一局</button>
+    <button id="changeWeapon" class="ghost">更换武器</button>
+    <button id="shareOver" class="ghost">战绩图</button>
+  </div>
+</div>
+</div><!-- /app -->
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
